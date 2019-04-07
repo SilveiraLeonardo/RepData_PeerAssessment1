@@ -1,25 +1,174 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Project Assignment 1 - Week 2"
+author: "Leonardo Silveira"
+date: "April 7, 2019"
+output: html_document
 ---
 
+In this assignment we will analyze data from a personal activity monitoring device.
 
-## Loading and preprocessing the data
+The device collects data at 5 minutes intervals through out the day.
 
+First thing we'll do is to load some packages we need and then we'll read in the data collected from an anonymous individual
 
+```{r reading data, results = "HIDE"}
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+
+data1 <- read.csv("activity.csv", header = TRUE)
+
+```
 
 ## What is mean total number of steps taken per day?
 
+Since we already have our data, we are going to do some operations:
+
+1 - Put the date column in date type
+
+2 - group the data we have by date
+
+3 - calculate the sum of steps taken each day
+
+```{r}
+# transforming to date type
+data1$date <- ymd(data1$date)
+
+# grouping by data
+data2 <- filter(data1, is.na(steps) == FALSE)
+data3 <- group_by(data2, date)
+# calculating the total number of steps taken each day
+data3 <- summarise(data3, sum(steps))
+# renaming my column
+data3 <- rename(data3, total_steps =`sum(steps)`)
+
+```
+
+With this we can now plot a histogram of the sum of steps taken each day AND calculate some summary of the data - mean and median
+
+```{r}
+ggplot(data3, aes(total_steps)) + geom_histogram(binwidth = 3000, fill = "steelblue") + labs(title = "Histogram of sum of steps taken per day", y = "Count of days", x = "Sum of steps taken per day")
+
+mean(data3$total_steps)
+median(data3$total_steps)
+
+```
 
 
 ## What is the average daily activity pattern?
 
+In this point we want to plot the average activity throughout the day.  
+To acchieve this we will group our data by the interval variable and then calculate the average of the steps taken in each interval.  
+We also will print the maximum average value of steps
 
+```{r}
+by_interval <- group_by(data2, interval)
+by_interval <- summarise(by_interval, mean(steps))
+by_interval <- rename(by_interval, average = `mean(steps)`)
+
+ggplot(by_interval, aes(interval, average)) + geom_line(color = "steelblue", size = 1) + labs(title = "Average number of steps taken in each interval of the day", y = "Average number of steps", x = "Intervals of the day")
+
+pos_max <- which.max(by_interval$average)
+by_interval[pos_max,]
+
+```
 
 ## Imputing missing values
 
+First we calculate the total number of missing values
 
+```{r}
+sum(is.na(data1$steps))
+
+```
+
+Now we will fill out of the NA values with the average number of steps taken in that 5-minutes interval  
+We will do this in a data frame called data_filled  
+
+After that we will plot a new histogram of the sum of steps taken per day, and calculate the average and median number of steps taken   per day - with the new plot and the new summaries, we will compare the results with what we got analysing the data with NAs in it
+
+```{r}
+# strategy for filling all the missing data values
+# fill missing data with average number of steps taken in that 5-minute interval
+data_filled <- data1
+
+for (i in 1:nrow(data1)) {
+
+           
+        if(is.na(data1$steps[i])){
+                
+                value <- subset(by_interval, by_interval$interval == data1$interval[i])
+                data_filled$steps[i] <- value$average
+                
+        }
+        
+}
+ 
+# calculating the histogram, but now with the NAs filled out
+
+data_filled$date <- ymd(data_filled$date)
+filled2 <- group_by(data_filled, date)
+filled2 <- summarise(filled2, sum(steps))
+filled2 <- rename(filled2, total_steps =`sum(steps)`)
+
+
+ggplot(filled2, aes(total_steps)) + geom_histogram(binwidth = 3000, fill = "steelblue") + labs(title = "Histogram of total steps taken per day", y = "Count of days", x = "Sum of steps taken per day")
+
+mean(filled2$total_steps)       
+median(filled2$total_steps)
+
+```
+
+We see that the mean value of the total number of steps taken each day continues the same as before.  
+The median had a slight change, and now has the same value as the mean.  
+
+Imputing missing values does not have any major impact in the results for this dataset.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We want to see the mean of the steps taken in each 5-minutes interval, but now comparing the activity between weekdays and days of the weekend.  
+
+To do that the first thing we need to do is to identify what day of the week the date variable represents - for this we create two new variables: one with the name of the day of week, and the other with the number this day represent  
+
+Then we create a variable saying if that day of week is in the Weekend or in the Week 
+
+```{r}
+# creating a variable that says the day of the week of that day
+# weekends account for 1 (monday) and 7 (satuday)
+
+data_filled$name_day <- weekdays(data_filled$date)
+data_filled$number_day <- wday(data_filled$date)
+
+# a factor variable describing if the day is weekend or not
+
+for (i in 1:nrow(data_filled)) {
+        
+        if(data_filled$number_day[i] != 1 & data_filled$number_day[i] != 7){
+                data_filled$period[i] = "week"
+        }else{
+                data_filled$period[i] = "weekend"
+        }
+        
+}
+
+# changing the variable period to factor
+
+data_filled$period <- as.factor(data_filled$period)
+```
+
+Now that we have our data with the variable period (week or weekend), we can aggregate the average of the steps taken in each 5-minute interval by the factor period.  
+
+After that we plot the panel with this information using ggplot2
+
+```{r}
+# calculating the mean for each 5-minute interval for week and weekend
+
+data_agg <- aggregate(steps ~ interval + period, data_filled, mean)
+
+# plotting the panel
+
+ggplot(data_agg, aes(interval, steps)) + geom_line(color = "steelblue", size = 1) + facet_grid( period ~ .) + labs(title = "Average number of steps taken in each 5-minute interval by days of week and weeking")
+
+```
+
+And now we are done. :)
